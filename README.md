@@ -80,6 +80,99 @@ docker compose logs -f
 curl http://localhost:1133/health
 ```
 
+## Alternative: Running Without Docker
+
+If you're in an environment where Docker is not available (e.g., running inside a container, Docker-in-Docker limitations), you can run the server directly with Python and uv.
+
+### Quick Setup (Automated)
+
+For Linux environments with root access:
+
+```bash
+# Make setup script executable
+chmod +x scripts/setup_without_docker.sh
+
+# Run automated setup
+sudo bash scripts/setup_without_docker.sh
+```
+
+This script will:
+- Install system dependencies (Python 3.12, build tools, CMake)
+- Install uv package manager
+- Create virtual environment
+- Build llama-cpp-python with CUDA support (if GPU available)
+- Install all Python dependencies
+- Create configuration files and startup script
+
+After setup completes:
+
+```bash
+# 1. Generate API keys
+source .venv/bin/activate
+python scripts/generate_api_key.py
+
+# 2. Update .env with your API keys
+
+# 3. Download a model
+./scripts/download_model.sh
+
+# 4. Update MODEL_PATH in .env
+
+# 5. Start the server
+./start_server.sh
+```
+
+### Manual Setup
+
+If you prefer manual installation:
+
+```bash
+# 1. Install system dependencies
+apt-get update
+apt-get install -y python3.12 python3.12-dev build-essential cmake git wget curl
+
+# 2. Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# 3. Create virtual environment
+uv venv
+source .venv/bin/activate
+
+# 4. Install llama-cpp-python with CUDA (or without CMAKE_ARGS for CPU-only)
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" uv pip install llama-cpp-python --no-cache-dir
+
+# 5. Install dependencies
+uv pip install -e .
+
+# 6. Configure
+cp .env.example .env
+# Edit .env with your settings (update MODEL_PATH to absolute paths)
+
+# 7. Download model
+./scripts/download_model.sh
+
+# 8. Start server
+uvicorn app.main:app --host 0.0.0.0 --port 1133
+```
+
+### Docker-in-Docker Issues
+
+If you see errors like:
+```
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+```
+
+This means you're running inside a container where Docker daemon cannot start. Use the non-Docker setup above instead.
+
+### GPU Support Without Docker
+
+The non-Docker setup supports GPU acceleration:
+- Verify GPU: `nvidia-smi`
+- Build with CUDA: Set `CMAKE_ARGS="-DLLAMA_CUBLAS=on"` when installing llama-cpp-python
+- For CPU-only: Omit CMAKE_ARGS and set `N_GPU_LAYERS=0` in `.env`
+
 ## Configuration
 
 All configuration is done through the `.env` file. See [.env.example](.env.example) for all available options.
@@ -299,7 +392,30 @@ pytest tests/ -v
 
 ## Troubleshooting
 
-### CUDA Not Detected
+### Docker-in-Docker Not Working
+
+**Problem:** Running inside a container and Docker daemon won't start
+
+**Error Messages:**
+```
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+```
+
+**Solution:**
+You're running inside a container environment where Docker-in-Docker is not available. Use the non-Docker setup instead:
+
+```bash
+# Use the automated setup script
+chmod +x scripts/setup_without_docker.sh
+sudo bash scripts/setup_without_docker.sh
+
+# Follow the prompts to complete setup
+```
+
+See the [Alternative: Running Without Docker](#alternative-running-without-docker) section for detailed instructions.
+
+### CUDA Not Detected (Docker)
 
 **Problem:** GPU not being used during inference
 
@@ -311,6 +427,27 @@ docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
 # Check docker-compose.yml has GPU config
 # Rebuild without cache
 docker compose build --no-cache
+```
+
+### CUDA Not Detected (Non-Docker)
+
+**Problem:** GPU not being used during inference in non-Docker setup
+
+**Solution:**
+```bash
+# 1. Verify GPU is visible
+nvidia-smi
+
+# 2. Check if llama-cpp-python was built with CUDA
+python -c "from llama_cpp import Llama; print(Llama(model_path='', n_gpu_layers=1))" 2>&1 | grep -i cuda
+
+# 3. Reinstall llama-cpp-python with CUDA support
+source .venv/bin/activate
+pip uninstall llama-cpp-python -y
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python --no-cache-dir --force-reinstall
+
+# 4. Verify N_GPU_LAYERS in .env is not 0
+grep N_GPU_LAYERS .env
 ```
 
 ### Out of Memory

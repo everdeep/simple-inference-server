@@ -6,7 +6,7 @@ Loads configuration from environment variables and .env file.
 from pathlib import Path
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,10 +18,13 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Server host")
     log_level: str = Field(default="info", description="Logging level")
 
-    # Authentication
-    api_keys: List[str] = Field(
-        default_factory=list,
-        description="List of valid API keys (comma-separated in env)"
+    # Authentication (stored as comma-separated string to avoid JSON parsing)
+    api_keys_str: str = Field(
+        default="",
+        validation_alias="api_keys",
+        serialization_alias="api_keys",
+        description="List of valid API keys (comma-separated in env)",
+        exclude=True,
     )
     admin_api_key: str = Field(
         default="",
@@ -79,16 +82,17 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
+        populate_by_name=True,
     )
 
-    @field_validator("api_keys", mode="before")
-    @classmethod
-    def parse_api_keys(cls, v):
-        """Parse comma-separated API keys from environment variable."""
-        if isinstance(v, str):
-            return [key.strip() for key in v.split(",") if key.strip()]
-        return v
+    @computed_field  # type: ignore[misc]
+    @property
+    def api_keys(self) -> List[str]:
+        """Parse API keys from comma-separated string."""
+        if not self.api_keys_str:
+            return []
+        return [key.strip() for key in self.api_keys_str.split(",") if key.strip()]
 
     @field_validator("model_path", mode="before")
     @classmethod

@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  llm-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: remote-llm-server
+    ports:
+      - "1133:1133"
+    environment:
+      - PORT=1133
+      - HOST=0.0.0.0
+    env_file:
+      - .env
+    volumes:
+      # Mount models directory (read-only for security)
+      - ./models:/app/models:ro
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1133/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

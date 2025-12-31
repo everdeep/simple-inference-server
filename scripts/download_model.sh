@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Create models directory if it doesn't exist
-MODELS_DIR="$(dirname "$0")/../models"
+MODELS_DIR="$(dirname "$0")/../app/models"
 mkdir -p "$MODELS_DIR"
 
 echo "==========================================="
@@ -105,7 +105,7 @@ if [ -f "$MODEL_FILE" ]; then
     echo "Size: $FILE_SIZE"
     echo ""
     echo "Update your .env file with:"
-    echo "  MODEL_PATH=/app/models/$(basename "$MODEL_FILE")"
+    echo "  MODEL_PATH=app/models/$(basename "$MODEL_FILE")"
 else
     echo -e "${RED}Download failed${NC}"
     exit 1
